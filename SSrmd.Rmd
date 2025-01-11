@@ -1,0 +1,593 @@
+---
+title: "Research Script"
+author: "Eze-Emiri CN"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Install packages and load libraries
+
+Install required packages and open their respective libraries: sf, rgdal, and readxl
+
+```{r packages}
+library(sf)
+library(rgdal)
+library(readxl)
+library(psych)
+library(ggplot2)
+library(Hmisc)
+library(corrplot)
+library(spdep)
+library(GWmodel)
+library(tmap)
+library(viridis)
+library(RColorBrewer)
+library(dplyr)
+library(car)
+```
+
+### Read Nigeria shape file 
+Read shape file using readOGR() and rename to ngamap
+NB: Add geopolitical zone map
+
+```{r}
+ngamap1 <- readOGR(dsn = "C:/Users/xyaze/Documents/NGA_adm", layer = "NGA_adm1", verbose = TRUE)
+class(ngamap1)
+head(ngamap1@data) #view columns
+plot(ngamap1) #visualise the Map of Nigeria
+geozone <- read_excel("C:/Users/xyaze/Desktop/Geo_Zone.xlsx", sheet = "Sheet1")
+ngageo <- sp::merge(ngamap1, geozone, by = 'NAME_1') #merge two data sets
+head(ngageo)
+View(ngageo) #view data set in a window
+ngageomap <- st_as_sf(ngageo)
+class(ngageomap)
+View(ngageomap)
+print(ggplot(ngageomap) + geom_sf(aes(fill = GEO_ZONE, color='')) + scale_fill_viridis_d(option = "viridis") + theme_bw()) #plot map
+tm_shape(ngageomap) + tm_fill (col = "GEO_ZONE", palette = "viridis", title = "Geopolitical Zones")
+```
+
+##Extract south south data and visualise
+Plot the map of South-South Nigeria showing the 123 Local Government Areas using the subset() function
+
+```{r}
+
+ssmap1 <- subset(ngamap1, ID_1 == 3 | ID_1 == 6 | ID_1 == 9 | ID_1 == 10 | ID_1 == 12 | ID_1 == 33) #filter south-south states
+ssmap1 <- st_as_sf(ssmap1)
+class(ssmap1) #view object type
+head(ssmap1) #snapshot of data -first 6 rows and columns
+ggplot(ssmap1) + geom_sf(aes(fill = NAME_1, color='')) + scale_fill_viridis_d(option = "viridis") + theme_bw() #plot map
+
+
+```
+```{r}
+ngamap <- readOGR(dsn = "C:/Users/xyaze/Documents/NGA_adm", layer = "NGA_adm2", verbose = TRUE)
+ssmap <- subset(ngamap, ID_1 == 3 | ID_1 == 6 | ID_1 == 9 | ID_1 == 10 | ID_1 == 12 | ID_1 == 33) #filter south-south states
+ssmap <- st_as_sf(ssmap)
+ggplot(ssmap) + geom_sf(aes(fill = NAME_1, color='')) + scale_fill_viridis_d(option = "viridis") + theme_bw()
+tm_shape(ssmap) + tm_fill (col = "NAME_1", palette = "viridis", title = "South-South States")
+```
+
+
+
+```{r}
+rschdata <- read_excel("C:/Users/xyaze/Desktop/rschdata.xlsx", sheet = "Sheet1") #import data
+head(rschdata) #snapshot of data
+```
+
+### Merge spatial and non-spatial data
+
+Merge data sets using similar columns
+
+```{r}
+
+ssdata <- merge(ssmap, rschdata) #merge two data sets
+head(ssdata)
+View(ssdata) #view data set in a window
+ssdata <- st_as_sf(ssdata) #convert object to sf object
+class(ssdata)
+str(ssdata) #view structure of an object
+```
+
+
+### Data Visualisation of the 123 Local Government Areas in South South Nigeria
+
+
+Map showing the population of South-South Nigeria
+
+```{r}
+describe(rschdata$POP, fast = TRUE)
+options(scipen=100000) #before a plot sets legend numbers)
+ggplot(rschdata, aes(POP, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Population") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(POP, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Population", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "POP", palette = "-viridis", title = "Population")
+
+```
+
+Map showing the population density of South-South Nigeria
+*see if u can change legend scale to 500*
+
+
+```{r}
+describe(rschdata$POP_DEN, fast = TRUE)
+ggplot(rschdata, aes(POP_DEN, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 150) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Population Density") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(POP_DEN, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Population Density", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "POP_DEN", palette = "-viridis", title = "Population Density")
+
+```
+Map showing the distribution of Public Health facilities in South-South Nigeria
+
+```{r}
+describe(rschdata$PUBLIC_HF, fast = TRUE)
+ggplot(rschdata, aes(PUBLIC_HF, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 3.5) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Public Health Facility") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(PUBLIC_HF, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Public Health Facility", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "PUBLIC_HF", palette = "-viridis", title = "Public HF")+ tm_layout(legend.position = c(0.45, 0.45))
+
+```
+
+Map showing the coverage of Public Health facilities per 100,000 persons in South-South Nigeria
+
+```{r}
+describe(rschdata$PHF_COV, fast = TRUE)
+ggplot(rschdata, aes(PHF_COV, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 2.1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Public Health Facility Coverage") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(PHF_COV, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Public Health Facility Coverage", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "PHF_COV", palette = "-viridis", title = "Public HF Coverage")
+
+```
+
+Map showing the estimated people living with HIV in South-South Nigeria
+
+```{r}
+describe(rschdata$EST_PLHIV, fast = TRUE)
+ggplot(rschdata, aes(EST_PLHIV, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 850) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Estimated PLHIV") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(EST_PLHIV, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Estimated PLHIV", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "EST_PLHIV", palette = "-viridis", title = "Estimated PLHIV")
+```
+
+Map showing the distribution of people currently on HIV treatment (TX_CURR) in South-South Nigeria
+
+```{r}
+describe(rschdata$TX_CURR, fast = TRUE)
+ggplot(rschdata, aes(TX_CURR, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_fill_viridis_d(option = "viridis") + theme_bw()
+ggplot(rschdata, aes(TX_CURR, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + theme_bw()
+ggplot(ssdata) + geom_sf(aes(fill = TX_CURR)) + scale_fill_viridis(direction = -1) + theme_bw()
+```
+
+Map showing the distribution of people currently on HIV treatment (NORTX_CURR) in South-South Nigeria
+
+```{r}
+describe(rschdata$NOR_TXCURR, fast = TRUE)
+ggplot(rschdata, aes(EST_PLHIV, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 450) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Noramlised TX_CURR") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(EST_PLHIV, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Noramlised TX_CURR", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(ssdata) + geom_sf(aes(fill = NOR_TXCURR)) + scale_fill_viridis(direction = -1) + theme_bw()
+```
+
+Map showing the Public Health facilities offering HIV services in South-South Nigeria
+
+```{r}
+describe(rschdata$ART_HF, fast = TRUE)
+ggplot(rschdata, aes(ART_HF, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 2.2) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "ART Health Facility") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(ART_HF, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "ART Health Facility", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "ART_HF", palette = "-viridis", title = "ART HF")
+```
+
+
+Map showing the distribution of Public Health facilities offering HIV services per 10,000 persons on treatment in South-South Nigeria
+
+```{r}
+describe(rschdata$AHF_COV, fast = TRUE)
+ggplot(rschdata, aes(AHF_COV, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1, binwidth = 23) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "ART Health Facility Coverage") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(AHF_COV, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "ART Health Facility Coverage", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "AHF_COV", palette = "-viridis", title = "ART HF Coverage")
+```
+
+
+Map showing the distribution of population poverty in South-South Nigeria
+
+```{r}
+describe(rschdata$POP_POV, fast = TRUE)
+ggplot(rschdata, aes(POP_POV, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Population Poverty") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(POP_POV, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Population Poverty", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "POP_POV", palette = "-viridis", title = "Population Poverty")
+```
+
+Map showing the distribution of health deprivation in South-South Nigeria
+
+```{r}
+describe(rschdata$HEALTH_DEP, fast = TRUE)
+ggplot(rschdata, aes(HEALTH_DEP, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Health Deprivation") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(HEALTH_DEP, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Health Deprivation", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "HEALTH_DEP", palette = "-viridis", title = "Health Deprivation")
+```
+
+Map showing the distribution of education deprivation in South-South Nigeria
+
+```{r}
+attach(rschdata)
+plot(EDUC_DEP,TX_CURR, type="p")
+describe(rschdata$EDUC_DEP, fast = TRUE)
+ggplot(rschdata, aes(EDUC_DEP, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Education Deprivation") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(EDUC_DEP, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Education Deprivation", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "EDUC_DEP", palette = "-viridis", title = "Education Deprivation")
+```
+
+Map showing the distribution of work deprivation in South-South Nigeria
+
+```{r}
+describe(rschdata$WORK_DEP, fast = TRUE)
+ggplot(rschdata, aes(WORK_DEP, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Work Deprivation") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(WORK_DEP, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Work Deprivation", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "WORK_DEP", palette = "-viridis", title = "Work Deprivation")
+```
+
+Map showing the distribution of security shock in South-South Nigeria
+
+```{r}
+describe(rschdata$SEC_SHOCK, fast = TRUE)
+var(rschdata$SEC_SHOCK)
+ggplot(rschdata, aes(SEC_SHOCK, fill = factor(NAME_1))) + geom_dotplot(stackgroups = TRUE, method = "histodot", stroke=1) +  scale_y_continuous(NULL, breaks = NULL) + scale_fill_viridis_d(option = "viridis") + labs(x = "Security Shock") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+ggplot(rschdata, aes(SEC_SHOCK, fill = factor(NAME_1))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis") + labs(x = "Security Shock", y = "Frequency") + theme_bw() + theme(legend.title = element_blank(), legend.position = c(0.9,0.85))
+tm_shape(ssdata) + tm_fill (col = "SEC_SHOCK", palette = "viridis", title = "SECURITY_SHOCK") 
+```
+
+## Aspatial bivariate analysis using Scatter plot and matrix
+Scatter plot
+
+```{r}
+rschvar <- rschdata[c('NOR_TXCURR', 'POP_DEN', 'PHF_COV', 'AHF_COV', 'POP_POV', 'HEALTH_DEP', 'EDUC_DEP', 'WORK_DEP', 'SEC_SHOCK')]
+C <- cor(rschvar, method = "pearson", use ="complete.obs")
+corrplot.mixed(C, tl.cex = 0.8, tl.col="black")
+Cc <- cor(rschvar, method = "spearman", use ="complete.obs")
+corrplot.mixed(Cc, tl.cex = 0.8, tl.col="black")
+pairs(rschvar)
+```
+
+Scatter Plot Matrix
+
+```{r}
+rcorr(as.matrix(rschvar), type ="pearson")
+```
+
+```{r}
+rcorr(as.matrix(rschvar), type ="spearman")
+```
+
+##Near Neighbour Analysis
+Centroids 
+
+```{r}
+ssdatacast <- st_cast(ssdata, "POLYGON") #change multipolygon to polygon in .shf data set
+head(ssdatacast)
+st_centroid(ssdata)
+plot(st_geometry(ssdata))
+plot(st_geometry(st_centroid(ssdata)), pch = 3, cex = 0.5, col = 'red', add=TRUE)
+```
+Near Neighbour Analysis
+
+```{r}
+ID_2 = row.names(ssdatacast)
+ssdatacast$ID_2 = ID_2
+sscastnb1 <- poly2nb(as(ssdata, "Spatial")) # creating adjacency matrix (neighborhood graph)
+summary(sscastnb1)
+head(sscastnb1)
+plot(st_geometry(ssdata), border="grey60", axes = TRUE)
+plot(sscastnb1, st_coordinates(st_centroid(ssdata)), pch = 19, cex = 0.01, col="red", add=TRUE)
+head(st_coordinates(st_centroid(ssdata)))
+```
+
+Near Neighbor 2
+
+```{r}
+sscastcoords <- st_coordinates(st_centroid(st_geometry(ssdata)))
+sscastnbsf = nb2lines(sscastnb1, coords=sscastcoords, proj4string=CRS("+proj=longlat +datum=WGS84"), as_sf=T) # weights are binary
+summary(sscastnbsf)
+ggplot(ssdata) + geom_sf(fill = 'NA', color = 'grey', border='grey60') + geom_sf(data = sscastnbsf, pch = 3, cex = 0.5, col="red") + theme_minimal() + ylab("Latitude") + xlab("Longitude")
+```
+
+
+Moran I Test
+
+```{r}
+moran(ssdata$NOR_TXCURR, nb2listw(sscastnb1, style="W", zero.policy=TRUE), length(sscastnb1), Szero(nb2listw(sscastnb1, style="W", zero.policy=TRUE)), zero.policy = TRUE)
+moran.test(ssdata$NOR_TXCURR, nb2listw(sscastnb1, style="W", zero.policy=TRUE), na.action=na.pass, zero.policy = TRUE, alternative = "two.sided") #zero.policy for missing values, na.pass puts a 0 instead of deleting observation)
+moran.mc(ssdata$NOR_TXCURR, nb2listw(sscastnb1, style = "W", zero.policy = TRUE), zero.policy = TRUE, nsim = 999, alternative = "two.sided")
+moran.plot(ssdata$NOR_TXCURR, nb2listw(sscastnb1, zero.policy=TRUE))
+moran.plot(as.vector(scale(ssdata$NOR_TXCURR)), nb2listw(sscastnb1, zero.policy=TRUE), xlim=c(-0.8, 8), ylim=c(-0.8,2.8), pch=1, ylab = 'Spatially Lagged NOR_TXCURR', xlab = 'Normalised TX_CURR')
+```
+
+```{r}
+sslmoran <-localmoran(ssdata$NOR_TXCURR, nb2listw(sscastnb1, style="W", zero.policy=TRUE), zero.policy = TRUE, na.action=na.pass)
+print(sslmoran)
+hist(sslmoran)
+lmoranmap <- cbind(ssdata, sslmoran)
+mdf <- cbind(ssdata, sslmoran, (attributes(sslmoran)$quadr))
+tm_shape(lmoranmap) + tm_fill(col = "Ii", style ="quantile",  midpoint = 0, palette = "viridis", title = "Local Moran Observed Statistic") 
+tm_shape(lmoranmap) + tm_fill(col = "E.Ii", style ="quantile",  midpoint = 0, palette = "-viridis", title = "Local Moran Expected Statistic") 
+tm_shape(lmoranmap) + tm_fill(col = "Z.Ii", style ="quantile",  midpoint = 0, palette = "-viridis", title = "Local Moran Z-Score Statistic")
+tm_shape(lmoranmap) + tm_fill(col = "Pr.z....E.Ii..", style ="quantile",  midpoint = 0, palette = "viridis", title = "Local Moran P-Value")
+```
+
+
+```{r}
+sscastlistw <- nb2listw(sscastnb1, style="W", zero.policy=TRUE)
+geary.test(ssdata$NOR_TXCURR, sscastlistw, zero.policy = TRUE)
+geary.mc(ssdata$NOR_TXCURR,sscastlistw, nsim=999, zero.policy = TRUE)
+```
+
+Hotspot analysis
+
+```{r}
+
+sscastlistb <- nb2listw(sscastnb1, style="B", zero.policy=TRUE)
+GGis <- globalG.test(ssdata$NOR_TXCURR, sscastlistb, zero.policy = TRUE, alternative = "two.sided")
+print(GGis)
+```
+
+```{r}
+Gis <- localG(ssdata$NOR_TXCURR, sscastlistw, zero.policy = TRUE)
+print(Gis)
+Gimap <- cbind(ssdata, as.matrix(Gis), as.matrix(attributes(Gis)$internals), as.matrix(attributes(Gis)$cluster))
+Gimap <- Gimap %>% rename('prz'= 'Pr.z....E.Gi..')
+Gimap <- Gimap %>% rename_at('as.matrix.attributes.Gis..cluster.', ~'cluster')
+tm_shape(Gimap) + tm_fill(col = "as.matrix.Gis.", palette = "-viridis", midpoint = NA, title = "G*") + tm_legend(position = c("centre", "top"))
+tm_shape(Gimap) + tm_fill(col = "Gi", palette = "-viridis", title = "Local G Observed Statistic")
+tm_shape(Gimap) + tm_fill(col = "prz", style ="quantile", palette = "-viridis", title = "Local G P-Value") + tm_layout(legend.position = c(0.45, 0.65))
+
+
+```
+
+
+
+## Aspatial multivariate analysis using Poisson distribution 
+Poisson regression
+
+```{r}
+poisson_output <-glm(formula = NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK,
+data = rschdata, family = poisson)
+print(summary(poisson_output))
+vif_values <- vif(poisson_output)
+vif_values
+barplot(vif_values, main = "VIF Values", horiz = TRUE, col = "black", cex.names = 0.5)+ abline(v = 5, lwd = 3, lty = 2)
+
+plot(poisson_output)
+
+
+poisson_output1 <-glm(formula = NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + EDUC_DEP + WORK_DEP + SEC_SHOCK,
+data = rschdata, family = poisson)
+print(summary(poisson_output1))
+vif_values1 <- vif(poisson_output1)
+vif_values1
+
+library(MASS)
+gnb <- glm(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK, family = negative.binomial(2), data = rschdata)
+print(summary(gnb))
+pchisq(466.25, 114, lower.tail = FALSE)
+
+lm.morantest(gnb, sscastlistw, alternative = "two.sided")
+lm.LMtests(gnb, sscastlistw, test = c("LMerr", "LMlag", "RLMerr", "RLMlag", "SARMA"))
+
+
+
+
+```
+
+
+Geographical weighted poisson regression
+```{r}
+ssdataspdf <- sf:::as_Spatial(ssdata)
+DM<-gw.dist(dp.locat=coordinates(ssdataspdf))
+ssdataspdf$NOR_TXCURR <- round(ssdataspdf$NOR_TXCURR, digits = 0)
+bw <- bw.ggwr(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK, data = ssdataspdf, family = "poisson", approach = "AICc", kernel = "exponential", adaptive = TRUE, dMat = DM )
+gwr <- ggwr.basic(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK, data = ssdataspdf, bw=bw, family ="poisson", kernel = "exponential", adaptive = FALSE, dMat=DM)
+gwr
+
+
+bw1 <- bw.ggwr(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + EDUC_DEP + WORK_DEP + SEC_SHOCK, data = ssdataspdf, family = "poisson", approach = "AICc", kernel = "exponential", adaptive = TRUE, dMat = DM )
+gwr1 <- ggwr.basic(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK, data = ssdataspdf, bw=bw, family ="poisson", kernel = "exponential", adaptive =TRUE, dMat=DM)
+gwr1
+
+
+
+gwr$bandwidth
+gwr$SDF
+gc <- round(cor(as.data.frame(gwr$SDF[,2:11]), use ="complete.obs"),2)
+corrplot.mixed(gc, tl.cex = 0.8, tl.col="black")
+pairs(as(gwr$SDF, "data.frame")[,2:11], pch=".")
+gwr$GW.diagnostic
+
+```
+### Create spatial data frame
+
+```{r}
+ssdataspdf@data$y<-gwr$SDF$y
+ssdataspdf@data$yhat<-gwr$SDF$yhat
+ssdataspdf@data$residual<-gwr$SDF$residual
+rsd=sd(ssdataspdf@data$residual)
+ssdataspdf@data$stdRes<-(ssdataspdf@data$residual)/sd(ssdataspdf@data$residual)
+ssdataspdf@data$LLN=ssdataspdf@data$yhat-1.645*rsd
+ssdataspdf@data$ULN=ssdataspdf@data$yhat+1.645*rsd
+
+
+
+# Intercept
+ssdataspdf@data$Intercept<-gwr$SDF$Intercept
+ssdataspdf@data$est_POP_DEN<-gwr$SDF$POP_DEN
+ssdataspdf@data$est_PHF_COV<-gwr$SDF$PHF_COV
+ssdataspdf@data$est_AHF_COV<-gwr$SDF$AHF_COV
+ssdataspdf@data$est_POP_POV<-gwr$SDF$POP_POV
+ssdataspdf@data$est_HEALTH_DEP<-gwr$SDF$HEALTH_DEP
+ssdataspdf@data$est_EDUC_DEP<-gwr$SDF$EDUC_DEP
+ssdataspdf@data$est_WORK_DEP<-gwr$SDF$WORK_DEP
+ssdataspdf@data$est_SEC_SHOCK<-gwr$SDF$SEC_SHOCK
+
+# T-values
+ssdataspdf@data$t_Intercept<-gwr$SDF$Intercept_TV
+ssdataspdf@data$t_POP_DEN<-gwr$SDF$POP_DEN_TV
+ssdataspdf@data$t_PHF_COV<-gwr$SDF$PHF_COV_TV
+ssdataspdf@data$t_AHF_COV<-gwr$SDF$AHF_COV_TV
+ssdataspdf@data$t_POP_POV<-gwr$SDF$POP_POV_TV
+ssdataspdf@data$t_HEALTH_DEP<-gwr$SDF$HEALTH_DEP_TV
+ssdataspdf@data$t_EDUC_DEP<-gwr$SDF$EDUC_DEP_TV
+ssdataspdf@data$t_WORK_DEP<-gwr$SDF$WORK_DEP_TV
+ssdataspdf@data$t_SEC_SHOCK<-gwr$SDF$SEC_SHOCK_TV
+
+
+# Calculate psudo-t values
+
+ssdataspdf@data$p_POP_DEN<-2*pt(-abs(gwr$SDF$POP_DEN_TV),df=3103)
+ssdataspdf@data$p_PHF_COV<-2*pt(-abs(gwr$SDF$PHF_COV_TV),df=3103)
+ssdataspdf@data$p_AHF_COV<-2*pt(-abs(gwr$SDF$AHF_COV_TV),df=3103)
+ssdataspdf@data$p_POP_POV<-2*pt(-abs(gwr$SDF$POP_POV_TV),df=3103)
+ssdataspdf@data$p_HEALTH_DEP<-2*pt(-abs(gwr$SDF$HEALTH_DEP_TV),df=3103)
+ssdataspdf@data$p_EDUC_DEP<-2*pt(-abs(gwr$SDF$EDUC_DEP_TV),df=3103)
+ssdataspdf@data$p_WORK_DEP<-2*pt(-abs(gwr$SDF$WORK_DEP_TV),df=3103)
+ssdataspdf@data$p_SEC_SHOCK<-2*pt(-abs(gwr$SDF$SEC_SHOCK_TV),df=3103)
+
+ssdataspdf$sig_POP_DEN <-ifelse(ssdataspdf@data$est_POP_DEN > 0 &
+                               ssdataspdf@data$p_POP_DEN <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_PHF_COV <-ifelse(ssdataspdf@data$est_PHF_COV > 0 &
+                              ssdataspdf@data$p_PHF_COV <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_AHF_COV <-ifelse(ssdataspdf@data$est_AHF_COV > 0 &
+                               ssdataspdf@data$p_AHF_COV <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_POP_POV <-ifelse(ssdataspdf@data$est_POP_POV > 0 &
+                              ssdataspdf@data$p_POP_POV <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_HEALTH_DEP <-ifelse(ssdataspdf@data$est_HEALTH_DEP > 0 &
+                              ssdataspdf@data$p_HEALTH_DEP <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_EDUC_DEP <-ifelse(ssdataspdf@data$est_EDUC_DEP > 0 &
+                                     ssdataspdf@data$p_EDUC_DEP <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_WORK_DEP <-ifelse(ssdataspdf@data$est_WORK_DEP > 0 &
+                                     ssdataspdf@data$p_WORK_DEP <= 0.05 , 'Yes', "No")
+ssdataspdf$sig_SEC_SHOCK <-ifelse(ssdataspdf@data$est_SEC_SHOCK > 0 &
+                                     ssdataspdf@data$p_SEC_SHOCK <= 0.05 , 'Yes', "No")
+
+```
+
+
+
+
+#Local estimates
+```{r}
+popden <- tm_shape(ssdataspdf) + tm_polygons(col= "est_POP_DEN", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Density", main.title.size = 0.75) 
+phfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "est_PHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "PHF Coverage", main.title.size = 0.75) 
+ahfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "est_AHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "ART HF Coverage", main.title.size = 0.75) 
+ppov <- tm_shape(ssdataspdf) + tm_polygons(col= "est_POP_POV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Poverty", main.title.size = 0.75) 
+hdev <- tm_shape(ssdataspdf) + tm_polygons(col= "est_HEALTH_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Health Deprivation", main.title.size = 0.75) 
+edev <- tm_shape(ssdataspdf) + tm_polygons(col= "est_EDUC_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Education Deprivation", main.title.size = 0.75) 
+wdev <- tm_shape(ssdataspdf) + tm_polygons(col= "est_WORK_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Work Deprivation", main.title.size = 0.75) 
+sshk <- tm_shape(ssdataspdf) + tm_polygons(col= "est_SEC_SHOCK", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Security Shock", main.title.size = 0.75) 
+tmap_arrange(popden, phfcov, ahfcov, ppov, hdev, edev, wdev, sshk, ncol = 4)
+```
+
+
+```{r}
+tpopden <- tm_shape(ssdataspdf) + tm_polygons(col= "t_POP_DEN", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Density", main.title.size = 0.75) 
+tphfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "t_PHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "PHF Coverage", main.title.size = 0.75) 
+tahfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "t_AHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "ART HF Coverage", main.title.size = 0.75) 
+tppov <- tm_shape(ssdataspdf) + tm_polygons(col= "t_POP_POV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Poverty", main.title.size = 0.75) 
+thdev <- tm_shape(ssdataspdf) + tm_polygons(col= "t_HEALTH_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Health Deprivation", main.title.size = 0.75) 
+tedev <- tm_shape(ssdataspdf) + tm_polygons(col= "t_EDUC_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Education Deprivation", main.title.size = 0.75) 
+twdev <- tm_shape(ssdataspdf) + tm_polygons(col= "t_WORK_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Work Deprivation", main.title.size = 0.75) 
+tsshk <- tm_shape(ssdataspdf) + tm_polygons(col= "t_SEC_SHOCK", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Security Shock", main.title.size = 0.75) 
+tmap_arrange(tpopden, tphfcov, tahfcov, tppov, thdev, tedev, twdev, tsshk, ncol = 4)
+```
+
+
+```{r}
+spopden <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_POP_DEN", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Density", main.title.size = 0.75) 
+sphfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_PHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "PHF Coverage", main.title.size = 0.75) 
+sahfcov <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_AHF_COV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "ART HF Coverage", main.title.size = 0.75) 
+sppov <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_POP_POV", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Population Poverty", main.title.size = 0.75) 
+shdev <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_HEALTH_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Health Deprivation", main.title.size = 0.75) 
+sedev <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_EDUC_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Education Deprivation", main.title.size = 0.75) 
+swdev <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_WORK_DEP", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 0.55, legend.outside = TRUE, main.title = "Work Deprivation", main.title.size = 0.75) 
+ssshk <- tm_shape(ssdataspdf) + tm_polygons(col= "sig_SEC_SHOCK", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "", style = "cont", legend.is.portrait = FALSE) + tm_layout(legend.outside.position = "bottom", legend.outside.size = 0.2, legend.text.size = 5, legend.outside = TRUE, main.title = "Security Shock", main.title.size = 0.75) 
+tmap_arrange(spopden, sphfcov, sahfcov, sppov, shdev, sedev, swdev, ssshk, ncol = 4)
+tm_shape(ssdataspdf) + tm_polygons(col= "stdRes", palette = "GnBu", border.col = "grey80", border.alpha = 0.5, title = "GWRP Std. Residuals", style = "cont")
+
+
+```
+
+
+
+```{r}
+library(writexl)
+write_xlsx(ssdataspdf@data, "C:/Users/xyaze/Desktop/ssdataspdf.xls")
+
+```
+
+
+```{r}
+library(spatialreg)
+ev <- eigenw(sscastlistw)
+W <- as(sscastlistw, "CsparseMatrix")
+trMatc <- trW(W, type="mult")
+txlageig <- lagsarlm(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK,
+data = rschdata, listw=sscastlistw,
+method="eigen", quiet=FALSE, control=list(pre_eig=ev, OrdVsign=1))
+txx <- summary(txlageig, correlation=TRUE)
+coef(txx)
+txx
+txerrorlag <- errorsarlm(NOR_TXCURR ~ POP_DEN + PHF_COV + AHF_COV + POP_POV + HEALTH_DEP + EDUC_DEP + WORK_DEP + SEC_SHOCK,
+data = rschdata, listw=sscastlistw)
+txerrorlag
+summary(txerrorlag)
+```
+
+
+
+```{r}
+ssdata$pos <- predict(poisson_output)
+ssdata$nbr <- predict(gnb)
+ssdata$txeig <- predict(txlageig)
+ssdata$txerr <- predict(txerrorlag)
+
+tm_shape(ssdata) + tm_polygons(col = "nbr", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "pos", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "txeig", palette = "GnBu", title = "txeig", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "txerr", palette = "GnBu", title = "txerr", border.col = "grey80", border.alpha = 0.5)
+
+ssdata$posres <- residuals(poisson_output)
+ssdata$nbres <- residuals(gnb)
+ssdata$txeigres <- residuals(txlageig)
+ssdata$txerres <- residuals(txerrorlag)
+
+tm_shape(ssdata) + tm_polygons(col = "nbres", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "posres", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "txerres", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+tm_shape(ssdata) + tm_polygons(col = "txeigres", palette = "GnBu", title = "", border.col = "grey80", border.alpha = 0.5)
+
+```
+
+Trends
+```{r}
+trend <- read_excel("C:/Users/xyaze/Desktop/trend.xlsx", sheet = "Sheet1")
+trenddata <- merge(ssmap, trend)
+trenddata <- st_as_sf(trenddata)
+trendy <- read_excel("C:/Users/xyaze/Desktop/trend.xlsx", sheet = "Sheet4")
+trendydata <- merge(ssmap, trendy)
+trendydata <- st_as_sf(trendydata)
+trend1 <- read_excel("C:/Users/xyaze/Desktop/trend.xlsx", sheet = "Sheet3")
+trends <- merge(ssmap, trend1)
+```
+
+```{r}
+ggplot(trend1, aes(TX_CURR, fill = factor(State))) + geom_histogram() +  scale_fill_viridis_d(option = "viridis", direction = -1) + theme_bw() + facet_wrap(~YEAR) + labs(x = "TX_CURR", y = "Frequency") + theme(legend.position = "bottom", legend.title = element_blank(), legend.text = element_text(size = 0.5))
+trend1 <- read_excel("C:/Users/xyaze/Desktop/trend.xlsx", sheet = "Sheet3")
+trends <- merge(ssmap, trend1)
+tm_shape(trends) + tm_polygons('TX_CURR', title = "TX_CURR", palette = "-viridis", border.col = "white", border.alpha = 0.5) + tm_facets("YEAR", free.coords = FALSE) + tm_layout(panel.labels = c('2018', '2019', '2020', '2021', '2022'), legend.show = FALSE)
+
+
+```
+
+
+
+
+`
+## 
